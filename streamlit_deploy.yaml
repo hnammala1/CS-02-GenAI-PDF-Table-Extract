@@ -15,6 +15,11 @@ Parameters:
   S3BucketName:
     Description: S3 bucket containing application code
     Type: String
+
+  CidrIPRange:
+    Description: CIDR Range for Security Group
+    Type: String
+    Default: 73.13.100.24/32
   
 Resources:
 
@@ -24,16 +29,29 @@ Resources:
       ImageId: !Ref LatestAmiId 
       InstanceType: t2.micro
       KeyName: !Ref KeyPairName
-      SecurityGroups: !Ref InstanceSecurityGroup
+      SecurityGroups:
+        - !Ref InstanceSecurityGroup
       IamInstanceProfile: !Ref InstanceProfile
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
           yum update -y
-          yum install -y python3 git
-          pip3 install streamlit
-          aws s3 cp s3://${S3BucketName}/app.py /home/ec2-user/app.py
-          sudo -u ec2-user STREAMLIT_SERVER_PORT=8501 /usr/local
+          yum install -y git
+          yum -y groupinstall "Development Tools"
+          yum -y install openssl-devel bzip2-devel libffi-devel
+          wget https://www.python.org/ftp/python/3.9.16/Python-3.9.16.tgz
+          tar xzf Python-3.9.16.tgz
+          cd Python-3.9.16
+          ./configure --enable-optimizations
+          make altinstall
+          sudo -i -u ec2-user STREAMLIT_SERVER_PORT=8501
+          export S3_BUCKET_NAME=${S3BucketName}
+          python3.9 -m venv env
+          source env/bin/activate
+          pip3.9 install --quiet boto3 streamlit streamlit_chat langchain amazon-textract-response-parser amazon-textract-prettyprinter amazon-textract-helper faiss faiss-cpu
+          git clone https://github.com/duttaabh/CS-02-GenAI-PDF-Table-Extract
+          cp CS-02-GenAI-PDF-Table-Extract/main.py ~/main.py
+          nohup python3.9 -m streamlit run /home/ec2-user/main.py &
 
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
@@ -43,7 +61,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 8501
           ToPort: 8501
-          CidrIp: 0.0.0.0/0
+          CidrIp: !Ref CidrIPRange
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -52,17 +70,25 @@ Resources:
       Roles:
         - !Ref AdminRole
 
-    AdminRole:
-      Type: AWS::IAM::Role
-      Properties:
-        AssumeRolePolicyDocument:
-          Version: 2012-10-17
-          Statement:
-            - Effect: Allow
-              Principal:
-                Service:
-                  - ec2.amazonaws.com
-              Action:
-                - sts:AssumeRole
-        ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/Administrator
+  AdminRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+Outputs:
+  EC2InstanceID:
+    Description: The Instance ID
+    Value: !Ref EC2Instance
+  BuckeName:
+    Description: The bucket name
+    Value: !Ref S3BucketName
