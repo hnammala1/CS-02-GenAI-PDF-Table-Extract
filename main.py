@@ -15,8 +15,8 @@ from langchain.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import botocore.exceptions
 
-s3 = boto3.client('s3')
-textract_client = boto3.client('textract')
+s3 = boto3.client('s3', region_name='us-east-1')
+textract_client = boto3.client('textract', region_name='us-east-1')
 
 if 'S3_BUCKET_NAME' not in os.environ:
     bucket_name = 'textract-eample-ad-cs'
@@ -227,7 +227,7 @@ def generate_embedding(table_info=[]):
 
 def extract_table_data_from_pdf(file_name):
     # st.markdown('<u>Embeddings</u>', unsafe_allow_html=True)
-    textract = boto3.client('textract')
+    textract = boto3.client('textract', region_name='us-east-1')
     foldername = file_name.split('.')[0]
     response = call_textract(input_document=('s3://' + bucket_name + '/' + foldername + '/' + file_name),
                              features=[Textract_Features.TABLES],
