@@ -18,7 +18,10 @@ import botocore.exceptions
 s3 = boto3.client('s3')
 textract_client = boto3.client('textract')
 
-bucket_name = 'textract-eample-ad-cs'
+if 'S3_BUCKET_NAME' not in os.environ:
+    bucket_name = 'textract-eample-ad-cs'
+else:
+    bucket_name = os.environ['S3_BUCKET_NAME']
 
 def upload_file(file):
     try:
