@@ -1,0 +1,7 @@
+boto3
+streamlit
+streamlit_chat
+langchain
+amazon-textract-response-parser
+amazon-textract-prettyprinter
+amazon-textract-helper
