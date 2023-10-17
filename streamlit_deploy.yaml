@@ -22,6 +22,11 @@ Parameters:
     Default: 73.13.100.24/32
   
 Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: !Ref S3BucketName
 
   EC2Instance:
     Type: AWS::EC2::Instance
