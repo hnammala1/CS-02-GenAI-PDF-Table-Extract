@@ -207,7 +207,7 @@ def build_index_from_string(table_info=[]): #creates and returns an in-memory ve
 
     opensearch_vector_search = OpenSearchVectorSearch(
         opensearch_url = opensearch_endpoint, #"https://5fso0en8s31bts1p2so5.us-east-1.aoss.amazonaws.com",
-        index_name = "test",
+        index_name = os.path.splitext(uploaded_file.name.lower())[0],
         embedding_function = embeddings,
         http_auth=awsauth,
         timeout = 300,
