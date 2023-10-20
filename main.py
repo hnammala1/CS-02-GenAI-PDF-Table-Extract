@@ -15,13 +15,30 @@ from langchain.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import botocore.exceptions
 
+from requests_aws4auth import AWS4Auth
+from opensearchpy import OpenSearch, RequestsHttpConnection
+from langchain.vectorstores import OpenSearchVectorSearch
+
 s3 = boto3.client('s3', region_name='us-east-1')
 textract_client = boto3.client('textract', region_name='us-east-1')
+
+client = boto3.client('opensearchserverless')
+service = 'aoss'
+region = 'us-east-1'
+credentials = boto3.Session().get_credentials()
+awsauth = AWS4Auth(credentials.access_key, credentials.secret_key,
+                   region, service, session_token=credentials.token)
+
 
 if 'S3_BUCKET_NAME' not in os.environ:
     bucket_name = 'textract-eample-ad-cs'
 else:
     bucket_name = os.environ['S3_BUCKET_NAME']
+
+if 'OPENSEARCH_ENDPOINT' not in os.environ:
+    opensearch_endpoint = 'xxx'
+else:
+    opensearch_endpoint = os.environ['OPENSEARCH_ENDPOINT']
 
 def upload_file(file):
     try:
@@ -104,20 +121,6 @@ def get_tables_fromJSON(response):
             AllTables.append(tableMatrix)
     return AllTables
 
-def generate_insights(table_info=[]):
-    bedrock_client = boto3.client('bedrock-runtime')
-    body = json.dumps({
-        "prompt": "\n\nHuman:Explain the details in " + str(table_info) + "\n\nAssistant:",
-        "max_tokens_to_sample": 300,
-        "temperature": 0.1,
-        "top_p": 0.9,
-    })
-    modelId = 'anthropic.claude-v2'
-    accept = 'application/json'
-    contentType = 'application/json'
-    response = bedrock_client.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
-    response_body = json.loads(response.get('body').read())
-    return response_body['completion']
 
 def get_rag_chat_response(input_text, memory, index):  # chat client function
     llm = get_llm()
@@ -161,6 +164,9 @@ def get_memory():  # create memory for this chat session
                                             return_messages=True)  # Maintains a history of previous messages
     return memory
 
+
+
+# Updated by MW
 def build_index_from_string(table_info=[]): #creates and returns an in-memory vector store to be used in the application
     from datetime import datetime
     filename = 'tmp-' + datetime.today().strftime('%Y%m%d%H%M%S') + '.txt'
@@ -171,8 +177,9 @@ def build_index_from_string(table_info=[]): #creates and returns an in-memory ve
     f.close()
 
     embeddings = BedrockEmbeddings(
-        region_name='us-west-2',
-        endpoint_url='https://prod.us-west-2.dataplane.bedrock.aws.dev'
+        region_name='us-east-1',
+        model_id='amazon.titan-embed-text-v1',
+        # endpoint_url='https://prod.us-west-2.dataplane.bedrock.aws.dev'
     )  # create a Titan Embeddings client
 
     text_splitter = RecursiveCharacterTextSplitter(  # create a text splitter
@@ -189,41 +196,29 @@ def build_index_from_string(table_info=[]): #creates and returns an in-memory ve
     from langchain.document_loaders import TextLoader
     loader = TextLoader(filename)
     index_from_loader = index_creator.from_loaders([loader])
-    # print(index_from_loader)
+
+    documents = loader.load()
+    docs = text_splitter.split_documents(documents)
+    # st.write(docs)
+
+    opensearch_vector_search = OpenSearchVectorSearch(
+        opensearch_url = opensearch_endpoint #"https://5fso0en8s31bts1p2so5.us-east-1.aoss.amazonaws.com",
+        index_name = "test",
+        embedding_function = embeddings,
+        http_auth=awsauth,
+        timeout = 300,
+        use_ssl = True,
+        verify_certs = True,
+        connection_class = RequestsHttpConnection
+    )
+
+    opensearch_vector_search.add_documents(documents=docs)
+
     if os.path.exists(filename):
         os.remove(filename)
     return index_from_loader
 
-def generate_embedding(table_info=[]):
-    bedrock = boto3.client(service_name='bedrock-runtime',
-                           region_name='us-west-2',
-                           endpoint_url='https://prod.us-west-2.dataplane.bedrock.aws.dev')
-    body = json.dumps({
-        "inputText": str(table_info)
-    })
 
-    modelId = 'amazon.titan-embed-text-v1'  # change this to use a different version from the model provider
-    accept = 'application/json'
-    contentType = 'application/json'
-    embedding = ''
-    try:
-
-        response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
-        response_body = json.loads(response.get('body').read())
-        embedding = response_body.get('embedding')
-        # print(embedding)
-
-    except botocore.exceptions.ClientError as error:
-
-        if error.response['Error']['Code'] == 'AccessDeniedException':
-            embedding=f"\x1b[41m{error.response['Error']['Message']}\
-                    \nTo troubeshoot this issue please refer to the following resources.\
-                     \nhttps://docs.aws.amazon.com/IAM/latest/UserGuide/troubleshoot_access-denied.html\
-                     \nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security-iam.html\x1b[0m\n"
-
-        else:
-            raise error
-    return embedding
 
 def extract_table_data_from_pdf(file_name):
     # st.markdown('<u>Embeddings</u>', unsafe_allow_html=True)
@@ -242,9 +237,6 @@ def extract_table_data_from_pdf(file_name):
     return table_info
     # st.write(generate_embedding(table_info))
 
-def display_generated_embeddings(file_name):
-    st.markdown('<u>Embeddings</u>', unsafe_allow_html=True)
-    st.write(generate_embedding(extract_table_data_from_pdf(file_name)))
 
 if 'generated' not in st.session_state:
     st.session_state['generated'] = []
@@ -285,7 +277,8 @@ if uploaded_file is not None:
                 st.session_state['memory'] = get_memory()
             if 'index' not in st.session_state:
                 st.session_state['index'] = build_index_from_string(extract_table_data_from_pdf(uploaded_file.name))
-            display_pdf_content(uploaded_file.name)
+            st.write(st.session_state['index'].vectorstore.as_retriever())
+            # display_pdf_content(uploaded_file.name)
             st.sidebar.header('Chat about the uploaded file here')
             with st.sidebar.form(key='widget', clear_on_submit=True):
                 user_input = get_text_input()
@@ -311,3 +304,99 @@ if uploaded_file is not None:
                             message(st.session_state["generated"][i], key=str(i))
     else:
         st.error("Error uploading file")
+
+# This function is never being called. Shall we delete? -- MW
+# def generate_insights(table_info=[]):
+#     bedrock_client = boto3.client('bedrock-runtime')
+#     body = json.dumps({
+#         "prompt": "\n\nHuman:Explain the details in " + str(table_info) + "\n\nAssistant:",
+#         "max_tokens_to_sample": 300,
+#         "temperature": 0.1,
+#         "top_p": 0.9,
+#     })
+#     modelId = 'anthropic.claude-v2'
+#     accept = 'application/json'
+#     contentType = 'application/json'
+#     response = bedrock_client.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
+#     response_body = json.loads(response.get('body').read())
+#     return response_body['completion']
+#  ----------------------------------------------
+
+# # This function is never being called. Shall we delete? -- MW
+# def generate_embedding(table_info=[]):
+#     bedrock = boto3.client(service_name='bedrock-runtime',
+#                            region_name='us-west-2')
+#     body = json.dumps({
+#         "inputText": str(table_info)
+#     })
+
+#     modelId = 'amazon.titan-embed-text-v1'  # change this to use a different version from the model provider
+#     accept = 'application/json'
+#     contentType = 'application/json'
+#     embedding = ''
+#     try:
+
+#         response = bedrock.invoke_model(body=body, modelId=modelId, accept=accept, contentType=contentType)
+#         response_body = json.loads(response.get('body').read())
+#         embedding = response_body.get('embedding')
+#         # print(embedding)
+#         st.write("Embeddings: ")
+#         st.write(embedding)
+
+#     except botocore.exceptions.ClientError as error:
+
+#         if error.response['Error']['Code'] == 'AccessDeniedException':
+#             embedding=f"\x1b[41m{error.response['Error']['Message']}\
+#                     \nTo troubeshoot this issue please refer to the following resources.\
+#                      \nhttps://docs.aws.amazon.com/IAM/latest/UserGuide/troubleshoot_access-denied.html\
+#                      \nhttps://docs.aws.amazon.com/bedrock/latest/userguide/security-iam.html\x1b[0m\n"
+
+#         else:
+#             raise error
+#     return embedding
+
+#  ---------------------------
+
+# This function is never being called. Shall we delete? -- MW
+# def display_generated_embeddings(file_name):
+#     st.markdown('<u>Embeddings</u>', unsafe_allow_html=True)
+#     st.write(generate_embedding(extract_table_data_from_pdf(file_name)))
+
+#  ---------------------------------
+
+# def build_index_from_string(table_info=[]): #creates and returns an in-memory vector store to be used in the application
+#     from datetime import datetime
+#     filename = 'tmp-' + datetime.today().strftime('%Y%m%d%H%M%S') + '.txt'
+#     f = open(filename, 'w')
+#     for tab in table_info:
+#         f.write(tab + '\n')
+#     f.flush()
+#     f.close()
+
+#     embeddings = BedrockEmbeddings(
+#         region_name='us-east-1',
+#         model_id='amazon.titan-embed-text-v1',
+#         # endpoint_url='https://prod.us-west-2.dataplane.bedrock.aws.dev'
+#     )  # create a Titan Embeddings client
+
+#     text_splitter = RecursiveCharacterTextSplitter(  # create a text splitter
+#         separators=["\n\n", "\n", ".", " "],
+#         chunk_size=1000,  # divide into 1000-character chunks using the separators above
+#         chunk_overlap=100  # number of characters that can overlap with previous chunk
+#     )
+
+#     index_creator = VectorstoreIndexCreator(  # create a vector store factory
+#         vectorstore_cls=FAISS,  # use an in-memory vector store for demo purposes
+#         embedding=embeddings,  # use Titan embeddings
+#         text_splitter=text_splitter,  # use the recursive text splitter
+#     )
+#     from langchain.document_loaders import TextLoader
+#     loader = TextLoader(filename)
+#     index_from_loader = index_creator.from_loaders([loader])
+#     st.write("index from loader: ")
+#     st.write(index_from_loader)
+#     st.write(index_from_loader.vectorstore)
+#     # print(index_from_loader)
+#     if os.path.exists(filename):
+#         os.remove(filename)
+#     return index_from_loader
