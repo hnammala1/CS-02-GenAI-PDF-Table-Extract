@@ -124,8 +124,12 @@ def get_tables_fromJSON(response):
 
 def get_rag_chat_response(input_text, memory, index):  # chat client function
     llm = get_llm()
-    conversation_with_retrieval = ConversationalRetrievalChain.from_llm(llm, index.vectorstore.as_retriever(),
+    # conversation_with_retrieval = ConversationalRetrievalChain.from_llm(llm, index.vectorstore.as_retriever(),
+    #                                                                     memory=memory)
+
+    conversation_with_retrieval = ConversationalRetrievalChain.from_llm(llm, index.as_retriever(),
                                                                         memory=memory)
+
     chat_response = conversation_with_retrieval(
         {"question": "\n\nHuman:Explain the details in " + input_text + "\n\nAssistant:"})  # pass the user message, history, and knowledge to the model
     # print(chat_response)
@@ -202,7 +206,7 @@ def build_index_from_string(table_info=[]): #creates and returns an in-memory ve
     # st.write(docs)
 
     opensearch_vector_search = OpenSearchVectorSearch(
-        opensearch_url = opensearch_endpoint #"https://5fso0en8s31bts1p2so5.us-east-1.aoss.amazonaws.com",
+        opensearch_url = opensearch_endpoint, #"https://5fso0en8s31bts1p2so5.us-east-1.aoss.amazonaws.com",
         index_name = "test",
         embedding_function = embeddings,
         http_auth=awsauth,
@@ -216,7 +220,8 @@ def build_index_from_string(table_info=[]): #creates and returns an in-memory ve
 
     if os.path.exists(filename):
         os.remove(filename)
-    return index_from_loader
+    # return index_from_loader
+    return opensearch_vector_search
 
 
 
@@ -277,7 +282,8 @@ if uploaded_file is not None:
                 st.session_state['memory'] = get_memory()
             if 'index' not in st.session_state:
                 st.session_state['index'] = build_index_from_string(extract_table_data_from_pdf(uploaded_file.name))
-            st.write(st.session_state['index'].vectorstore.as_retriever())
+            # st.write(st.session_state['index'].vectorstore.as_retriever())
+            st.write(st.session_state['index'].as_retriever())
             # display_pdf_content(uploaded_file.name)
             st.sidebar.header('Chat about the uploaded file here')
             with st.sidebar.form(key='widget', clear_on_submit=True):
