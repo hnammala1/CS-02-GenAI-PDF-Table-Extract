@@ -89,6 +89,39 @@ Resources:
               - sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
+  TextractVectorCollection:
+    Type: 'AWS::OpenSearchServerless::Collection'
+    Properties:
+      Name: textract-vector-collection
+      Type: VECTORSEARCH
+      Description: Search collection
+    DependsOn: [EncryptionPolicy, DataAccessPolicy, SecurityPolicy]
+  EncryptionPolicy:
+    Type: 'AWS::OpenSearchServerless::SecurityPolicy'
+    Properties:
+      Name: encryption-policy
+      Type: encryption
+      Description: Encryption policy for test collection
+      Policy: >-
+        {"Rules":[{"ResourceType":"collection","Resource":["collection/textract-vector-collection"]}],"AWSOwnedKey":true}
+  DataAccessPolicy:
+    Type: 'AWS::OpenSearchServerless::AccessPolicy'
+    Properties:
+      Name: data-access-policy
+      Type: data
+      Description: Access policy for my-collection
+      Policy: !Sub >-
+        [{"Description":"Access for test-user","Rules":[{"ResourceType":"index","Resource":["index/*/*"],"Permission":["aoss:*"]},
+        {"ResourceType":"collection","Resource":["collection/textract-vector-collection"],"Permission":["aoss:*"]}],
+        "Principal":["arn:aws:iam::${AWS::AccountId}:user/test-user"]}]
+  SecurityPolicy:
+    Type: 'AWS::OpenSearchServerless::SecurityPolicy'
+    Properties:
+      Name: network-policy
+      Type: network
+      Description: Network policy for test collections
+      Policy: >-
+        [{"Rules":[{"ResourceType":"collection","Resource":["collection/textract-vector-collection"]}],"AllowFromPublic":true}]
 
 Outputs:
   EC2InstanceID:
@@ -97,3 +130,7 @@ Outputs:
   BuckeName:
     Description: The bucket name
     Value: !Ref S3BucketName
+OpenSearchEndpoint:
+    Description: OpenSearch Collection OpenSearchEndpoint
+    Value: !GetAtt TextractVectorCollection.CollectionEndpoint 
+
