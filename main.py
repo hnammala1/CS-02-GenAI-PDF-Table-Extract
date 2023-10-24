@@ -31,7 +31,7 @@ awsauth = AWS4Auth(credentials.access_key, credentials.secret_key,
 
 
 if 'S3_BUCKET_NAME' not in os.environ:
-    bucket_name = 'textract-eample-ad-cs'
+    bucket_name = 'xxx'
 else:
     bucket_name = os.environ['S3_BUCKET_NAME']
 
