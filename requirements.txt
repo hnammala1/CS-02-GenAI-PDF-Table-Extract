@@ -5,3 +5,6 @@ langchain
 amazon-textract-response-parser
 amazon-textract-prettyprinter
 amazon-textract-helper
+faiss-cpu
+opensearch-py
+requests_aws4auth
