@@ -26,6 +26,8 @@ client = boto3.client('opensearchserverless')
 service = 'aoss'
 region = 'us-east-1'
 credentials = boto3.Session().get_credentials()
+print(credentials.access_key)
+print(credentials.token)
 awsauth = AWS4Auth(credentials.access_key, credentials.secret_key,
                    region, service, session_token=credentials.token)
 
@@ -34,12 +36,12 @@ if 'S3_BUCKET_NAME' not in os.environ:
     bucket_name = 'xxx'
 else:
     bucket_name = os.environ['S3_BUCKET_NAME']
-
+print(bucket_name)
 if 'OPENSEARCH_ENDPOINT' not in os.environ:
     opensearch_endpoint = 'xxx'
 else:
     opensearch_endpoint = os.environ['OPENSEARCH_ENDPOINT']
-
+print(opensearch_endpoint)
 def upload_file(file):
     try:
         foldername = file.name.split('.')[0]
