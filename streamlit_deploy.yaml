@@ -4,22 +4,21 @@ Description: Deploy Streamlit app on EC2
 
 Parameters:
 
-  KeyPairName:
-    Description: Enter the name of your EC2 key pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-  
   LatestAmiId:
     Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
     Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    AllowedPattern: "^(?=\\s*\\S).*$"
 
   S3BucketName:
-    Description: S3 bucket containing application code
+    Description: S3 bucket to upload the PDF files
     Type: String
+    AllowedPattern: "^(?=\\s*\\S).*$"
 
   CidrIPRange:
-    Description: CIDR Range for Security Group
+    Description: Please enter the Public CIDR of your local PC (e.g. 73.13.100.24/32)
     Type: String
     Default: 73.13.100.24/32
+    AllowedPattern: "^(?=\\s*\\S).*$"
   
 Resources:
   S3Bucket:
@@ -27,13 +26,16 @@ Resources:
     DeletionPolicy: Retain
     Properties:
       BucketName: !Ref S3BucketName
-
+  EC2KeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: !Sub '${AWS::StackName}-EC2KeyPair'
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
       ImageId: !Ref LatestAmiId 
       InstanceType: t2.micro
-      KeyName: !Ref KeyPairName
+      KeyName: !Ref EC2KeyPair
       SecurityGroups:
         - !Ref InstanceSecurityGroup
       IamInstanceProfile: !Ref InstanceProfile
@@ -72,10 +74,6 @@ Resources:
           echo "export AWS_DEFAULT_REGION=${AWS::Region}" >> /home/ec2-user/.bash_profile
           cd /home/ec2-user/
           source .bash_profile
-#          mkdir -p /home/ec2-user/.aws
-#          echo "[default]" >> /home/ec2-user/.aws/config
-#          echo "output = json" >> /home/ec2-user/.aws/config
-#          echo "region = ${AWS::Region}" >> /home/ec2-user/.aws/config
           python3.9 -m venv venv
           source venv/bin/activate
           git clone https://github.com/duttaabh/CS-02-GenAI-PDF-Table-Extract
@@ -88,7 +86,6 @@ Resources:
           echo "nohup python3.9 -m streamlit run /home/ec2-user/main.py &" >> /home/ec2-user/start_application.py
           chmod 755 /home/ec2-user/start_application.py
           chown -R ec2-user:ec2-user /home/ec2-user/
-#          nohup python3.9 -m streamlit run /home/ec2-user/main.py &
 
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
