@@ -63,22 +63,30 @@ Resources:
           export S3_BUCKET_NAME=$s3_bucket_name
           export OPENSEARCH_ENDPOINT=$os_endpoint_url
           export AWS_REGION=${AWS::Region}
+          export AWS_DEFAULT_REGION=${AWS::Region}
           echo "export PATH=$PATH:/usr/local/bin/python3.9" >> /home/ec2-user/.bash_profile
           echo "export STREAMLIT_SERVER_PORT=8501" >> /home/ec2-user/.bash_profile
           echo "export S3_BUCKET_NAME=$s3_bucket_name" >> /home/ec2-user/.bash_profile
           echo "export OPENSEARCH_ENDPOINT=$os_endpoint_url" >> /home/ec2-user/.bash_profile
           echo "export AWS_REGION=${AWS::Region}" >> /home/ec2-user/.bash_profile
+          echo "export AWS_DEFAULT_REGION=${AWS::Region}" >> /home/ec2-user/.bash_profile
           cd /home/ec2-user/
           source .bash_profile
-          mkdir -p /home/ec2-user/.aws
-          echo "[default]" > /home/ec2-user/.aws/config
-          echo "output = json" > /home/ec2-user/.aws/config
-          echo "region = ${AWS::Region}" > /home/ec2-user/.aws/config
+#          mkdir -p /home/ec2-user/.aws
+#          echo "[default]" >> /home/ec2-user/.aws/config
+#          echo "output = json" >> /home/ec2-user/.aws/config
+#          echo "region = ${AWS::Region}" >> /home/ec2-user/.aws/config
           python3.9 -m venv venv
           source venv/bin/activate
           git clone https://github.com/duttaabh/CS-02-GenAI-PDF-Table-Extract
           pip3.9 install -r CS-02-GenAI-PDF-Table-Extract/requirements.txt
           cp CS-02-GenAI-PDF-Table-Extract/main.py /home/ec2-user/main.py
+          echo "#!/bin/bash" >> /home/ec2-user/start_application.py
+          echo "cd /home/ec2-user/" >> /home/ec2-user/start_application.py
+          echo ". .bash_profile" >> /home/ec2-user/start_application.py
+          echo "source venv/bin/activate" >> /home/ec2-user/start_application.py
+          echo "nohup python3.9 -m streamlit run /home/ec2-user/main.py &" >> /home/ec2-user/start_application.py
+          chmod 755 /home/ec2-user/start_application.py
           chown -R ec2-user:ec2-user /home/ec2-user/
 #          nohup python3.9 -m streamlit run /home/ec2-user/main.py &
 
