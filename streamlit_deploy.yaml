@@ -40,23 +40,47 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
+          set -x
           yum update -y
-          yum install -y git
           yum -y groupinstall "Development Tools"
-          yum -y install openssl-devel bzip2-devel libffi-devel
+          yum -y install git aws-cli openssl-devel bzip2-devel libffi-devel
           wget https://www.python.org/ftp/python/3.9.16/Python-3.9.16.tgz
           tar xzf Python-3.9.16.tgz
+          rm -rf Python-3.9.16.tgz
           cd Python-3.9.16
           ./configure --enable-optimizations
           make altinstall
-          sudo -i -u ec2-user STREAMLIT_SERVER_PORT=8501
-          export S3_BUCKET_NAME=${S3BucketName}
-          python3.9 -m venv env
-          source env/bin/activate
-          pip3.9 install --quiet boto3 streamlit streamlit_chat langchain amazon-textract-response-parser amazon-textract-prettyprinter amazon-textract-helper faiss faiss-cpu
+          su ec2-user
+          s3_bucket_name=${S3BucketName}
+          admin_role="arn:aws:iam::${AWS::AccountId}:role/${AdminRole}"
+          os_endpoint_url="https://${TextractVectorCollection}.${AWS::Region}.aoss.amazonaws.com"
+          echo $s3_bucket_name > /home/ec2-user/envconfig.txt
+          echo $admin_role >> /home/ec2-user/envconfig.txt
+          echo $os_endpoint_url >> /home/ec2-user/envconfig.txt
+          export PATH=$PATH:/usr/local/bin/python3.9
+          echo $PATH
+          export STREAMLIT_SERVER_PORT=8501
+          export S3_BUCKET_NAME=$s3_bucket_name
+          export OPENSEARCH_ENDPOINT=$os_endpoint_url
+          export AWS_REGION=${AWS::Region}
+          echo "export PATH=$PATH:/usr/local/bin/python3.9" >> /home/ec2-user/.bash_profile
+          echo "export STREAMLIT_SERVER_PORT=8501" >> /home/ec2-user/.bash_profile
+          echo "export S3_BUCKET_NAME=$s3_bucket_name" >> /home/ec2-user/.bash_profile
+          echo "export OPENSEARCH_ENDPOINT=$os_endpoint_url" >> /home/ec2-user/.bash_profile
+          echo "export AWS_REGION=${AWS::Region}" >> /home/ec2-user/.bash_profile
+          cd /home/ec2-user/
+          source .bash_profile
+          mkdir -p /home/ec2-user/.aws
+          echo "[default]" > /home/ec2-user/.aws/config
+          echo "output = json" > /home/ec2-user/.aws/config
+          echo "region = ${AWS::Region}" > /home/ec2-user/.aws/config
+          python3.9 -m venv venv
+          source venv/bin/activate
           git clone https://github.com/duttaabh/CS-02-GenAI-PDF-Table-Extract
-          cp CS-02-GenAI-PDF-Table-Extract/main.py ~/main.py
-          nohup python3.9 -m streamlit run /home/ec2-user/main.py &
+          pip3.9 install -r CS-02-GenAI-PDF-Table-Extract/requirements.txt
+          cp CS-02-GenAI-PDF-Table-Extract/main.py /home/ec2-user/main.py
+          chown -R ec2-user:ec2-user /home/ec2-user/
+#          nohup python3.9 -m streamlit run /home/ec2-user/main.py &
 
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
@@ -67,7 +91,10 @@ Resources:
           FromPort: 8501
           ToPort: 8501
           CidrIp: !Ref CidrIPRange
-
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref CidrIPRange
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -83,12 +110,15 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
+              AWS:
+                - !Sub arn:aws:iam::${AWS::AccountId}:root
               Service:
                 - ec2.amazonaws.com
             Action:
               - sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/AdministratorAccess
+
   TextractVectorCollection:
     Type: 'AWS::OpenSearchServerless::Collection'
     Properties:
@@ -96,6 +126,7 @@ Resources:
       Type: VECTORSEARCH
       Description: Search collection
     DependsOn: [EncryptionPolicy, DataAccessPolicy, SecurityPolicy]
+
   EncryptionPolicy:
     Type: 'AWS::OpenSearchServerless::SecurityPolicy'
     Properties:
@@ -104,6 +135,7 @@ Resources:
       Description: Encryption policy for test collection
       Policy: >-
         {"Rules":[{"ResourceType":"collection","Resource":["collection/textract-vector-collection"]}],"AWSOwnedKey":true}
+
   DataAccessPolicy:
     Type: 'AWS::OpenSearchServerless::AccessPolicy'
     Properties:
@@ -111,9 +143,10 @@ Resources:
       Type: data
       Description: Access policy for my-collection
       Policy: !Sub >-
-        [{"Description":"Access for test-user","Rules":[{"ResourceType":"index","Resource":["index/*/*"],"Permission":["aoss:*"]},
+        [{"Description":"Access for ${AdminRole}","Rules":[{"ResourceType":"index","Resource":["index/*/*"],"Permission":["aoss:*"]},
         {"ResourceType":"collection","Resource":["collection/textract-vector-collection"],"Permission":["aoss:*"]}],
-        "Principal":["arn:aws:iam::${AWS::AccountId}:user/test-user"]}]
+        "Principal":["arn:aws:iam::${AWS::AccountId}:role/${AdminRole}"]}]
+
   SecurityPolicy:
     Type: 'AWS::OpenSearchServerless::SecurityPolicy'
     Properties:
@@ -130,7 +163,6 @@ Outputs:
   BuckeName:
     Description: The bucket name
     Value: !Ref S3BucketName
-OpenSearchEndpoint:
+  OpenSearchEndpoint:
     Description: OpenSearch Collection OpenSearchEndpoint
-    Value: !GetAtt TextractVectorCollection.CollectionEndpoint 
-
+    Value: !GetAtt TextractVectorCollection.CollectionEndpoint
