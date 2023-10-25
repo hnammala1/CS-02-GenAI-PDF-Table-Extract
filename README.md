@@ -8,5 +8,5 @@ Steps:
 5. Use SSM to login to the instance and open the EC2 terminal
 6. Login as root and check the /var/log/cloud-init-output.log to see if the initialization scripts have successfully run
 7. Login as ec2-user and navigate to /home/ce2-user/ directory
-8. Run ./start_application.py to run the streamlit application
+8. Run ./start_application.sh to run the streamlit application
 9. Find the Streamlit URL in the nohup.out and click on the External URL
