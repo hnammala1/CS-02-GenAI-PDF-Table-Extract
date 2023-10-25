@@ -79,10 +79,10 @@ Resources:
           git clone https://github.com/duttaabh/CS-02-GenAI-PDF-Table-Extract
           pip3.9 install -r CS-02-GenAI-PDF-Table-Extract/requirements.txt
           cp CS-02-GenAI-PDF-Table-Extract/main.py /home/ec2-user/main.py
-          echo "#!/bin/bash" >> /home/ec2-user/start_application.py
-          echo "cd /home/ec2-user/" >> /home/ec2-user/start_application.py
-          echo ". .bash_profile" >> /home/ec2-user/start_application.py
-          echo "source venv/bin/activate" >> /home/ec2-user/start_application.py
+          echo "#!/bin/bash" >> /home/ec2-user/start_application.sh
+          echo "cd /home/ec2-user/" >> /home/ec2-user/start_application.sh
+          echo ". .bash_profile" >> /home/ec2-user/start_application.sh
+          echo "source venv/bin/activate" >> /home/ec2-user/start_application.sh
           echo "nohup python3.9 -m streamlit run /home/ec2-user/main.py &" >> /home/ec2-user/start_application.py
           chmod 755 /home/ec2-user/start_application.py
           chown -R ec2-user:ec2-user /home/ec2-user/
