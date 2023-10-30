@@ -1,10 +1,17 @@
+To get started, you must install the following python libraries:
+
 boto3
 streamlit
 streamlit_chat
 langchain
 amazon-textract-response-parser
 amazon-textract-prettyprinter
-amazon-textract-helper
+amazon-textract-helper and
 faiss-cpu
 opensearch-py
 requests_aws4auth
+
+# PDF Tables Extraction
+# Install the libraries with the following code:
+
+pip install boto3 streamlit streamlit_chat langchain amazon-textract-response-parser amazon-textract-prettyprinter amazon-textract-helper faiss-cpu opensearch-py requests_aws4auth
